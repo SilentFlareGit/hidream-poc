@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "description": "Phase 2 model artifacts for the pinned ComfyUI checkout. Model files remain outside Git.",
+  "artifacts": [
+    {
+      "id": "chroma1-hd",
+      "model_family": "chroma",
+      "role": "diffusion_model",
+      "source_repository": "lodestones/Chroma1-HD",
+      "source_url": "https://huggingface.co/lodestones/Chroma1-HD/resolve/main/Chroma1-HD.safetensors",
+      "filename": "Chroma1-HD.safetensors",
+      "destination_relative_to_comfyui": "models/diffusion_models/Chroma1-HD.safetensors",
+      "sha256": "d446d9695d08276f61e53653e025289dd96f7a489c27982a1fa54ecabc06642a",
+      "expected_size_bytes": null,
+      "required": true,
+      "license_metadata": "apache-2.0",
+      "license_review_required": false,
+      "notes": "Canonical Phase 2 Chroma1-HD BF16 diffusion artifact. Alternative FP8 and GGUF diffusion-model variants are out of scope; the separately listed FP8-scaled T5 encoder is canonical. The manifest intentionally leaves size unresolved until the source reports it.",
+      "track": "chroma1-hd"
+    },
+    {
+      "id": "chroma-t5xxl-fp8-scaled",
+      "model_family": "chroma",
+      "role": "text_encoder",
+      "source_repository": "comfyanonymous/flux_text_encoders",
+      "source_url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors",
+      "filename": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+      "destination_relative_to_comfyui": "models/text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors",
+      "sha256": "a498f0485dc9536735258018417c3fd7758dc3bccc0a645feaa472b34955557a",
+      "expected_size_bytes": 5157348688,
+      "required": true,
+      "license_metadata": "apache-2.0",
+      "license_review_required": false,
+      "notes": "Canonical Chroma text encoder artifact for the Phase 2 workflow.",
+      "track": "chroma1-hd"
+    },
+    {
+      "id": "chroma-ae",
+      "model_family": "chroma",
+      "role": "vae",
+      "source_repository": "lodestones/Chroma",
+      "source_url": "https://huggingface.co/lodestones/Chroma/resolve/main/ae.safetensors",
+      "filename": "ae.safetensors",
+      "destination_relative_to_comfyui": "models/vae/ae.safetensors",
+      "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38",
+      "expected_size_bytes": 335304388,
+      "required": true,
+      "license_metadata": "apache-2.0",
+      "license_review_required": false,
+      "notes": "Canonical Chroma autoencoder artifact for the Phase 2 workflow.",
+      "track": "chroma1-hd"
+    },
+    {
+      "id": "pony-v6-xl",
+      "model_family": "pony",
+      "role": "checkpoint",
+      "source_repository": "AstraliteHeart/pony-diffusion-v6",
+      "source_url": "https://huggingface.co/AstraliteHeart/pony-diffusion-v6/resolve/main/v6.safetensors",
+      "filename": "v6.safetensors",
+      "destination_relative_to_comfyui": "models/checkpoints/ponyDiffusionV6XL_v6StartWithThisOne.safetensors",
+      "sha256": "67ab2fd8ec439a89b3fedb15cc65f54336af163c7eb5e4f2acc98f090a29b0b3",
+      "expected_size_bytes": 6938041050,
+      "required": true,
+      "license_metadata": "upstream model metadata; review required",
+      "license_review_required": true,
+      "commercial_license_review_required": true,
+      "notes": "Personal/local Phase 2 PoC only. Record and review the upstream model license and usage terms before any monetized or redistributed deployment.",
+      "track": "pony-v6-xl"
+    }
+  ]
+}

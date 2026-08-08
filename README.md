@@ -4,7 +4,7 @@ Private/local AI image-generation proof of concept using ComfyUI on rented NVIDI
 
 ## Phase 1 status
 
-Phase 1 provides host validation and a minimal direct ComfyUI runtime for the Vast.ai PyTorch template. Later phases will cover the Chroma1-HD and Pony Diffusion V6 XL tracks. This phase does not download model weights, install custom nodes, add ComfyUI Manager, or create workflows.
+Phase 1 provides host validation and a minimal direct ComfyUI runtime for the Vast.ai PyTorch template. Phase 2 adds a verified model manifest, guarded downloads, and static baseline workflows for the Chroma1-HD and Pony Diffusion V6 XL tracks. This repository still does not install custom nodes, add ComfyUI Manager, or download models during development validation.
 
 The intended test target is a verified Vast.ai Secure Cloud host with the standard Vast PyTorch image, 150 GB or more of storage, and an NVIDIA GPU. The scripts do not hard-code a GPU model.
 
@@ -77,6 +77,42 @@ The ComfyUI Git commit pins the source checkout only. Python dependencies are re
 
 If Vast requires ComfyUI to listen on a non-loopback interface for its forwarding path, set `COMFYUI_HOST` deliberately and set `COMFYUI_ALLOW_NON_LOOPBACK=1` only after reviewing the instance firewall and network exposure. The start script warns because this can make the port publicly reachable. It never broadens the bind address automatically.
 
+## Phase 2 model setup
+
+Phase 2 is intended to run on the already validated Vast instance. The recommended Vast PyTorch template supplies `/venv/main/bin/python`; the model scripts use the same interpreter selected by the Phase 1 runtime. For an RTX 5090 or another RTX 50-series/Blackwell GPU, use a CUDA 12.8-compatible environment with PyTorch 2.7 or newer. `check-host.sh` must pass a real CUDA tensor operation before continuing.
+
+`config/models.json` is the checked-in machine-readable artifact manifest. It records the canonical repository, HTTPS source URL, destination filename, SHA-256, known size, and license metadata. It does not contain credentials, model files, cookies, or temporary URLs. The downloader does not use Hugging Face login, install packages, add custom nodes, install Manager, or download anything outside the manifest.
+
+The manifest pins model source artifacts and hashes. That is separate from Python dependency resolution: the ComfyUI Git commit pins the source checkout, while the pinned checkout's `requirements.txt` is resolved by pip in the existing Vast environment. A Git commit alone does not make all Python dependency versions fully reproducible.
+
+Approximate storage planning:
+
+- Pony V6 XL: 6,938,041,050 bytes, about 6.5 GiB, plus at least 10 GiB free after download.
+- Chroma's text encoder plus autoencoder: 5,492,653,076 bytes, about 5.1 GiB, plus the Chroma1-HD BF16 file.
+- The canonical Chroma1-HD manifest intentionally does not invent an expected size. The downloader resolves its remote size before downloading it.
+- The full BF16 Chroma diffusion track requires real 32 GB GPU validation; this repository does not claim that it fits. Alternative quantized diffusion-model fallbacks are outside Phase 2.
+
+The canonical Pony artifact has an upstream license review requirement. This phase is for a personal/local PoC only; review the upstream terms before any commercial, monetized, or redistributed deployment.
+
+Run this exact sequence on the already-running Vast checkout:
+
+```bash
+cd /workspace/hidream-poc
+git pull
+bash scripts/verify-models.sh --model all   # expected fail before download
+bash scripts/download-models.sh --dry-run --model all
+bash scripts/download-models.sh --model pony
+bash scripts/verify-models.sh --model pony
+bash scripts/download-models.sh --model chroma
+bash scripts/verify-models.sh --model chroma
+bash scripts/stop.sh
+bash scripts/start.sh
+```
+
+The downloader creates only the manifest destinations under the pinned ComfyUI checkout. It skips valid final files, refuses to overwrite an invalid final file, resumes `<filename>.part` files where the HTTPS server supports ranges, verifies size and SHA-256, and atomically renames a verified part into place. `--dry-run` performs no downloads; `--verify-only` reports each requested artifact and exits non-zero for a missing or invalid required file. No external/public network access is required for ComfyUI readiness checks, and port 8188 remains loopback-only by default.
+
+After restart, load `workflows/pony-v6-xl-basic.json` or `workflows/chroma1-hd-basic.json` through the ComfyUI browser. These are static core-node fixtures with deterministic one-image, 1024x1024 settings. Static JSON validation does not prove that the pinned ComfyUI commit, model files, or RTX 5090 runtime will execute them successfully; that evidence belongs to a real Vast run. The Pony workflow uses the core SDXL checkpoint loader and CLIP last-layer setting `-2`, with no refiner, LoRA, embeddings, or custom nodes.
+
 ## Troubleshooting
 
 ### `nvidia-smi` is unavailable
@@ -107,4 +143,4 @@ Reconnect over SSH, verify the repository and `.env` are present, run `bash scri
 
 Runtime state is stored under `.runtime/` and ignored by Git. Model weights, input images, generated output images, logs, PID files, and caches are also ignored. See `AGENTS.md`, `docs/POC_SCOPE.md`, and `docs/ACCEPTANCE.md` for the project boundary and evidence requirements.
 
-Phase 2 will add verified model manifests and download logic only after this Phase 1 runtime has been reviewed.
+Phase 2 stops at the verified manifest, guarded downloads, static baseline workflow fixtures, and their validators. No Phase 3 workflow expansion, benchmark automation, or runtime evidence is part of this patch.
