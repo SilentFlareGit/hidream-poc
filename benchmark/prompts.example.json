@@ -1,0 +1,12 @@
+{
+  "prompts": [
+    {
+      "id": "product-photo-001",
+      "prompt": "Professional studio photograph of a ceramic coffee mug on a clean table, softbox lighting, neutral background, high detail"
+    },
+    {
+      "id": "anime-illustration-001",
+      "prompt": "High quality anime-style illustration of an adult character standing in a city street at sunset, detailed background, cinematic lighting"
+    }
+  ]
+}
