@@ -1,0 +1,14 @@
+# Copy to config/models.yaml after verifying all upstream details.
+# Never invent hashes. Leave sha256 empty until independently verified.
+models:
+  chroma1_hd:
+    display_name: Chroma1-HD
+    source: "TO_BE_VERIFIED"
+    revision: "TO_BE_VERIFIED"
+    files: []
+
+  pony_v6_xl:
+    display_name: Pony Diffusion V6 XL
+    source: "TO_BE_VERIFIED"
+    revision: "TO_BE_VERIFIED"
+    files: []
