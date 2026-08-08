@@ -1,0 +1,42 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.token
+
+# Models / large artifacts
+models/*
+!models/.gitkeep
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.gguf
+
+# Inputs / outputs
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+benchmark/results/*
+!benchmark/results/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs / temp
+*.log
+.tmp/
+tmp/
