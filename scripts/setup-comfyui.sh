@@ -18,15 +18,12 @@ if ! command -v git >/dev/null 2>&1; then
   die 'Git is required to install ComfyUI.'
 fi
 
-if [[ "$COMFYUI_PYTHON" == */* ]]; then
-  PYTHON_BIN="$COMFYUI_PYTHON"
-  [[ -x "$PYTHON_BIN" ]] || die "Configured COMFYUI_PYTHON is not executable: $PYTHON_BIN"
-else
-  PYTHON_BIN="$(command -v "$COMFYUI_PYTHON" || true)"
-  [[ -n "$PYTHON_BIN" ]] || die "Python command not found: $COMFYUI_PYTHON"
+if ! PYTHON_BIN="$(resolve_python_executable "$COMFYUI_PYTHON")"; then
+  die "COMFYUI_PYTHON could not be resolved: $COMFYUI_PYTHON"
 fi
+printf 'Python executable (%s): %s\n' "$COMFYUI_PYTHON_SOURCE" "$PYTHON_BIN"
 
-mkdir -p "$COMFYUI_RUNTIME_DIR"
+mkdir -p "$COMFYUI_RUNTIME_DIR" "$(dirname "$COMFYUI_DIR")"
 
 if [[ -d "$COMFYUI_DIR/.git" || -f "$COMFYUI_DIR/.git" ]]; then
   if ! git -C "$COMFYUI_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -57,20 +54,54 @@ git -C "$COMFYUI_DIR" checkout --detach --quiet "$COMFYUI_COMMIT"
 actual_commit="$(git -C "$COMFYUI_DIR" rev-parse HEAD)"
 expected_commit="$(printf '%s' "$COMFYUI_COMMIT" | tr '[:upper:]' '[:lower:]')"
 [[ "$actual_commit" == "$expected_commit" ]] || die "Checked out commit $actual_commit instead of $expected_commit"
-
-if [[ ! -x "$COMFYUI_VENV_DIR/bin/python" ]]; then
-  printf 'Creating Python environment with access to the Vast template packages...\n'
-  "$PYTHON_BIN" -m venv --system-site-packages "$COMFYUI_VENV_DIR"
-fi
-VENV_PYTHON="$COMFYUI_VENV_DIR/bin/python"
-[[ -x "$VENV_PYTHON" ]] || die "Python virtual environment was not created: $COMFYUI_VENV_DIR"
 [[ -f "$COMFYUI_DIR/requirements.txt" ]] || die "ComfyUI requirements.txt is missing at the pinned commit"
 
-printf 'Installing dependencies from the pinned ComfyUI requirements.txt...\n'
-PIP_DISABLE_PIP_VERSION_CHECK=1 "$VENV_PYTHON" -m pip install --requirement "$COMFYUI_DIR/requirements.txt"
+before_ok=1
+if before_report="$(torch_probe "$PYTHON_BIN")"; then
+  :
+else
+  before_ok=0
+fi
+printf '%s\n' 'PyTorch environment before dependency installation:'
+printf '%s\n' "${before_report:-<no report>}"
+[[ "$before_ok" -eq 1 ]] || die 'The selected Vast PyTorch environment failed the required CUDA/PyTorch preflight; requirements were not installed.'
+
+constraints_file="$COMFYUI_RUNTIME_DIR/torch-constraints.txt"
+write_torch_constraints "$before_report" "$constraints_file"
+printf 'Protecting the working PyTorch stack with constraints: %s\n' "$constraints_file"
+
+pip_ok=1
+if ! PIP_DISABLE_PIP_VERSION_CHECK=1 "$PYTHON_BIN" -m pip install --requirement "$COMFYUI_DIR/requirements.txt" --constraint "$constraints_file"; then
+  pip_ok=0
+  printf '%s\n' 'Dependency installation failed; checking the PyTorch environment before exiting.' >&2
+fi
+
+after_ok=1
+if after_report="$(torch_probe "$PYTHON_BIN")"; then
+  :
+else
+  after_ok=0
+fi
+printf '%s\n' 'PyTorch environment after dependency installation:'
+printf '%s\n' "${after_report:-<no report>}"
+
+for key in torch_version torch_cuda torch_file; do
+  before_value="$(report_value "$key" "$before_report")"
+  after_value="$(report_value "$key" "$after_report")"
+  if [[ "$before_value" != "$after_value" ]]; then
+    printf 'ERROR: %s changed during dependency installation. Before: %s. After: %s.\n' "$key" "${before_value:-<missing>}" "${after_value:-<missing>}" >&2
+    pip_ok=0
+  fi
+done
+
+if [[ "$pip_ok" -ne 1 || "$after_ok" -ne 1 ]]; then
+  die 'ComfyUI dependency installation did not preserve a working CUDA PyTorch environment. Review the before/after report above.'
+fi
+
+printf '%s\n' "$PYTHON_BIN" > "$COMFYUI_PYTHON_STATE_FILE"
 
 printf '%s\n' 'ComfyUI setup completed.'
 printf 'Checkout: %s\n' "$COMFYUI_DIR"
 printf 'Commit:   %s\n' "$actual_commit"
-printf 'Python:   %s\n' "$VENV_PYTHON"
+printf 'Python:   %s\n' "$PYTHON_BIN"
 printf '%s\n' 'No models or custom nodes were installed.'

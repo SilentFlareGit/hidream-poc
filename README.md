@@ -8,6 +8,8 @@ Phase 1 provides host validation and a minimal direct ComfyUI runtime for the Va
 
 The intended test target is a verified Vast.ai Secure Cloud host with the standard Vast PyTorch image, 150 GB or more of storage, and an NVIDIA GPU. The scripts do not hard-code a GPU model.
 
+The recommended Vast PyTorch template supplies the working interpreter at `/venv/main/bin/python`. For an RTX 50-series or other Blackwell GPU, the runtime must provide CUDA 12.8 or newer compatibility and PyTorch 2.7 or newer. `check-host.sh` must pass a real CUDA tensor operation before setup continues.
+
 ComfyUI binds to `127.0.0.1:8188` by default. It is not intended to be exposed directly to the public Internet. Access it through an SSH tunnel from the local computer.
 
 ## Fresh Vast.ai setup
@@ -36,7 +38,7 @@ bash scripts/check-host.sh
 bash scripts/setup-comfyui.sh
 ```
 
-`setup-comfyui.sh` clones only `https://github.com/Comfy-Org/ComfyUI.git`, checks out the configured commit, creates `.runtime/venv` with access to packages supplied by the Vast PyTorch image, and installs the pinned checkout's official `requirements.txt`. It does not download models or custom nodes.
+`setup-comfyui.sh` clones only `https://github.com/Comfy-Org/ComfyUI.git`, checks out the configured commit, selects `/venv/main/bin/python` when available, and installs the pinned checkout's official `requirements.txt` into that same environment. It protects the existing PyTorch, CUDA, torchvision, and torchaudio versions with constraints and verifies the environment before and after installation. It does not create a nested virtual environment, download models, or install custom nodes.
 
 Start ComfyUI:
 
@@ -63,10 +65,15 @@ The scripts are safe to rerun. Start refuses a duplicate instance and stop handl
 Copy `.env.example` to `.env` before setup. `.env` is ignored by Git. The important values are:
 
 - `COMFYUI_COMMIT`: required, reviewed 40-character commit ID.
+- `COMFYUI_PYTHON`: blank by default, which prefers `/venv/main/bin/python`; set an explicit executable only when intentionally overriding it.
 - `COMFYUI_HOST`: `127.0.0.1` by default.
 - `COMFYUI_PORT`: `8188` by default.
 - `SSH_TUNNEL_HOST`, `SSH_TUNNEL_PORT`, and `SSH_TUNNEL_USER`: only used to print the tunnel command.
 - `SSH_LOCAL_PORT`: local browser port, normally `8188`.
+
+When upgrading an existing Phase 1 `.env`, remove any legacy nested-environment setting and clear `COMFYUI_PYTHON=python3` if you want the automatic `/venv/main/bin/python` preference. A non-empty `COMFYUI_PYTHON` is treated as an intentional override.
+
+The ComfyUI Git commit pins the source checkout only. Python dependencies are resolved by pip from the pinned checkout's `requirements.txt` inside the existing Vast environment; this is not a complete dependency lock. The setup script refuses to replace the working core PyTorch stack and reports before/after values if the environment changes.
 
 If Vast requires ComfyUI to listen on a non-loopback interface for its forwarding path, set `COMFYUI_HOST` deliberately and set `COMFYUI_ALLOW_NON_LOOPBACK=1` only after reviewing the instance firewall and network exposure. The start script warns because this can make the port publicly reachable. It never broadens the bind address automatically.
 
@@ -78,11 +85,11 @@ The host is not passing through an NVIDIA GPU or driver to the container. Confir
 
 ### `torch.cuda.is_available()` is false
 
-Compare the Python and PyTorch reported by `check-host.sh` with the template's CUDA/PyTorch installation. A CPU-only or mismatched PyTorch installation must be corrected in the host environment before continuing. Phase 1 does not install or select a replacement CUDA stack.
+Compare the Python and PyTorch reported by `check-host.sh` with the template's CUDA/PyTorch installation. A CPU-only or mismatched PyTorch installation must be corrected in the host environment before continuing. For RTX 5090/Blackwell, confirm CUDA 12.8 or newer compatibility and PyTorch 2.7 or newer. Phase 1.1 does not install or select a replacement CUDA stack.
 
 ### Dependency installation fails
 
-Read the command output and the pinned checkout's `requirements.txt`. Confirm outbound access to GitHub/PyPI, Python 3, and available disk space, then rerun `bash scripts/setup-comfyui.sh`. No model files are needed for this phase.
+Read the before/after PyTorch reports and the pinned checkout's `requirements.txt`. Confirm outbound access to GitHub/PyPI, the `/venv/main/bin/python` environment, and available disk space, then correct the host environment before rerunning `bash scripts/setup-comfyui.sh`. No model files are needed for this phase.
 
 ### Port 8188 is already occupied
 
@@ -98,6 +105,6 @@ Reconnect over SSH, verify the repository and `.env` are present, run `bash scri
 
 ## Runtime data and scope
 
-Runtime state is stored under `.runtime/` and ignored by Git. Model weights, input images, generated output images, logs, PID files, virtual environments, and caches are also ignored. See `AGENTS.md`, `docs/POC_SCOPE.md`, and `docs/ACCEPTANCE.md` for the project boundary and evidence requirements.
+Runtime state is stored under `.runtime/` and ignored by Git. Model weights, input images, generated output images, logs, PID files, and caches are also ignored. See `AGENTS.md`, `docs/POC_SCOPE.md`, and `docs/ACCEPTANCE.md` for the project boundary and evidence requirements.
 
 Phase 2 will add verified model manifests and download logic only after this Phase 1 runtime has been reviewed.

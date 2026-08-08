@@ -27,10 +27,45 @@ if ! gpu_info="$(nvidia-smi --query-gpu=name,memory.total,driver_version --forma
 fi
 [[ -n "$gpu_info" ]] || die 'nvidia-smi returned no GPU records. NVIDIA GPU access is unavailable.'
 
+smi_gpu_name="$(awk -F',' 'NR == 1 { gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1; exit }' <<<"$gpu_info")"
+nvidia_smi_driver="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | awk 'NR == 1 { gsub(/^[ \t]+|[ \t]+$/, ""); print; exit }' || true)"
+nvidia_smi_driver="${nvidia_smi_driver:-unreported}"
 cuda_reported="$(awk -F 'CUDA Version: ' '/CUDA Version:/ { split($2, value, " "); print value[1]; exit }' <<<"$smi_output")"
 cuda_reported="${cuda_reported:-unreported}"
+
 printf 'GPU name / VRAM / NVIDIA driver:\n%s\n' "$gpu_info"
-printf 'CUDA version reported by nvidia-smi: %s\n' "$cuda_reported"
+printf 'NVIDIA-SMI driver version: %s\n' "$nvidia_smi_driver"
+printf 'CUDA compatibility version reported by nvidia-smi: %s\n' "$cuda_reported"
+
+if ! PYTHON_BIN="$(resolve_python_executable "$COMFYUI_PYTHON")"; then
+  die "COMFYUI_PYTHON could not be resolved: $COMFYUI_PYTHON"
+fi
+printf 'Python executable (%s): %s\n' "$COMFYUI_PYTHON_SOURCE" "$PYTHON_BIN"
+
+probe_ok=1
+if torch_report="$(torch_probe "$PYTHON_BIN")"; then
+  :
+else
+  probe_ok=0
+fi
+printf '%s\n' 'PyTorch/CUDA validation:'
+printf '%s\n' "${torch_report:-<no report>}"
+
+torch_gpu_name="$(report_value gpu_name "$torch_report")"
+if [[ -n "$torch_gpu_name" && "$torch_gpu_name" != 'unavailable' ]]; then
+  selected_gpu_name="$torch_gpu_name"
+else
+  selected_gpu_name="$smi_gpu_name"
+fi
+blackwell_smi_ok=1
+if is_blackwell_gpu_name "$selected_gpu_name"; then
+  if version_at_least "$cuda_reported" "$BLACKWELL_MIN_CUDA"; then
+    printf 'Blackwell compatibility: nvidia-smi reports CUDA %s (minimum %s)\n' "$cuda_reported" "$BLACKWELL_MIN_CUDA"
+  else
+    printf 'ERROR: Blackwell compatibility failed: nvidia-smi reports CUDA %s, but CUDA %s or newer is required.\n' "$cuda_reported" "$BLACKWELL_MIN_CUDA" >&2
+    blackwell_smi_ok=0
+  fi
+fi
 
 printf '%s\n' 'CPU summary:'
 if cpu_summary="$(lscpu 2>/dev/null)"; then
@@ -49,44 +84,6 @@ if ! df -h "$POC_ROOT"; then
   printf '%s\n' 'Disk usage unavailable'
 fi
 
-PYTHON_BIN=''
-if command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN="$(command -v python3)"
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN="$(command -v python)"
-fi
-if [[ -n "$PYTHON_BIN" ]]; then
-  if python_version="$("$PYTHON_BIN" --version 2>&1)"; then
-    printf 'Python version: %s\n' "$python_version"
-  else
-    printf 'Python version: unavailable (%s)\n' "$python_version"
-  fi
-else
-  printf '%s\n' 'Python version: unavailable'
-fi
-
-if command -v git >/dev/null 2>&1; then
-  if git_version="$(git --version 2>&1)"; then
-    printf 'Git version: %s\n' "$git_version"
-  else
-    printf 'Git version: unavailable (%s)\n' "$git_version"
-  fi
-else
-  printf '%s\n' 'Git version: unavailable'
-fi
-
-if [[ -n "$PYTHON_BIN" ]] && "$PYTHON_BIN" -c 'import torch' >/dev/null 2>&1; then
-  "$PYTHON_BIN" - <<'PY'
-import torch
-
-print(f"PyTorch version: {torch.__version__}")
-print(f"torch.cuda.is_available(): {torch.cuda.is_available()}")
-print(f"PyTorch CUDA version: {torch.version.cuda or 'unreported'}")
-PY
-else
-  printf '%s\n' 'PyTorch: not installed or could not be imported'
-fi
-
 validate_port 'COMFYUI_PORT' "$COMFYUI_PORT"
 if port_in_use "$COMFYUI_PORT"; then
   printf 'TCP port %s: IN USE\n' "$COMFYUI_PORT"
@@ -97,6 +94,10 @@ else
     2) printf 'TCP port %s: unable to inspect (install ss or lsof)\n' "$COMFYUI_PORT" ;;
     *) die "could not determine whether TCP port $COMFYUI_PORT is in use" ;;
   esac
+fi
+
+if [[ "$probe_ok" -ne 1 || "$blackwell_smi_ok" -ne 1 ]]; then
+  die 'Host validation failed. PyTorch must import and pass a real CUDA tensor operation before setup or startup.'
 fi
 
 printf '%s\n' 'Host validation completed.'
