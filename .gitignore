@@ -29,6 +29,15 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.runtime/
+.pytest_cache/
+.mypy_cache/
+pip-wheel-metadata/
+
+# ComfyUI checkouts and local process files
+ComfyUI/
+comfyui/
+*.pid
 
 # IDE / OS
 .vscode/
@@ -38,5 +47,6 @@ Thumbs.db
 
 # Logs / temp
 *.log
+logs/
 .tmp/
 tmp/
